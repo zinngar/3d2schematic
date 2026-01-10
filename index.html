@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>3D Model to Schematic</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+        #viewer-container {
+            width: 500px;
+            height: 500px;
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <input type="file" id="model-input" />
+    <br>
+    <label for="resolution-input">Resolution:</label>
+    <input type="number" id="resolution-input" value="16" min="1" />
+    <br>
+    <div id="palette-container">
+      <label>Block Palette:</label>
+      <div id="palette-entries">
+        <!-- Palette entries will be added here dynamically -->
+      </div>
+      <button type="button" id="add-palette-entry">Add Block</button>
+    </div>
+    <br>
+    <button id="convert-button">Convert to Schematic</button>
+    <div id="loading" style="display: none;">Converting...</div>
+    <div id="viewer-container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three/examples/js/loaders/OBJLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three/examples/js/utils/BufferGeometryUtils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://unpkg.com/three-mesh-bvh@0.5.23/build/index.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nbtify/dist/browser.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>
