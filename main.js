@@ -329,7 +329,7 @@ function mergeGeometries(model) {
 
     const mergedGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries(geometries, true);
     const mesh = new THREE.Mesh(mergedGeometry, materials);
-    mesh.geometry.boundsTree = new THREE.MeshBVH(mesh.geometry);
+    mesh.geometry.boundsTree = new window.MeshBVHLib.MeshBVH(mesh.geometry);
     return mesh;
 }
 
