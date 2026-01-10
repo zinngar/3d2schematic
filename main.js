@@ -3,11 +3,23 @@ const convertButton = document.getElementById('convert-button');
 const viewerContainer = document.getElementById('viewer-container');
 
 let scene, camera, renderer, model, controls, modelFilename;
+let minecraftBlocks = [];
 
-function initPalette() {
+async function initPalette() {
+    await fetchBlocks();
     const addPaletteEntryButton = document.getElementById('add-palette-entry');
     addPaletteEntryButton.addEventListener('click', () => createPaletteEntry());
     createPaletteEntry('#ffffff', 'minecraft:stone');
+}
+
+async function fetchBlocks() {
+    try {
+        const response = await fetch('https://raw.githubusercontent.com/MCMrARM/minecraft-block-ids/master/blocks_271.json');
+        const blocks = await response.json();
+        minecraftBlocks = blocks.map(block => block.name);
+    } catch (error) {
+        console.error('Error fetching Minecraft blocks:', error);
+    }
 }
 
 function createPaletteEntry(color = '#ffffff', block = '') {
@@ -19,10 +31,14 @@ function createPaletteEntry(color = '#ffffff', block = '') {
     colorInput.type = 'color';
     colorInput.value = color;
 
-    const blockInput = document.createElement('input');
-    blockInput.type = 'text';
-    blockInput.value = block;
-    blockInput.placeholder = 'minecraft:stone';
+    const blockSelect = document.createElement('select');
+    for (const blockName of minecraftBlocks) {
+        const option = document.createElement('option');
+        option.value = blockName;
+        option.textContent = blockName;
+        blockSelect.appendChild(option);
+    }
+    blockSelect.value = block;
 
     const removeButton = document.createElement('button');
     removeButton.textContent = 'Remove';
@@ -31,7 +47,7 @@ function createPaletteEntry(color = '#ffffff', block = '') {
     });
 
     entryDiv.appendChild(colorInput);
-    entryDiv.appendChild(blockInput);
+    entryDiv.appendChild(blockSelect);
     entryDiv.appendChild(removeButton);
     paletteEntries.appendChild(entryDiv);
 }
