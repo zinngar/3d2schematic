@@ -150,17 +150,31 @@ async function convertToSchematic(model) {
 
     // Use a timeout to allow the UI to update before the heavy computation
     setTimeout(async () => {
-        const resolutionInput = document.getElementById('resolution-input');
-        const resolution = parseInt(resolutionInput.value, 10);
-        const palette = getPalette();
+        try {
+            console.log('Starting conversion...');
+            const resolutionInput = document.getElementById('resolution-input');
+            const resolution = parseInt(resolutionInput.value, 10);
+            const palette = getPalette();
+            console.log('Resolution:', resolution, 'Palette:', palette);
 
-        const voxels = voxelize(model, resolution, palette);
-        const nbtData = createNBT(voxels, resolution, palette);
-        const compressedNbt = await nbtify.write(nbtData, { compressed: true });
-        const outputFilename = modelFilename.replace(/\.[^/.]+$/, "") + ".litematic";
-        downloadFile(compressedNbt, outputFilename);
+            const voxels = voxelize(model, resolution, palette);
+            console.log('Voxelization complete. Voxels:', voxels.length);
 
-        loading.style.display = 'none';
+            const nbtData = createNBT(voxels, resolution, palette);
+            console.log('NBT data created.');
+
+            const compressedNbt = await nbtify.write(nbtData, { compressed: true });
+            console.log('NBT data compressed.');
+
+            const outputFilename = modelFilename.replace(/\.[^/.]+$/, "") + ".litematic";
+            downloadFile(compressedNbt, outputFilename);
+            console.log('File download initiated.');
+        } catch (error) {
+            console.error('Conversion failed:', error);
+            alert('An error occurred during conversion. See console for details.');
+        } finally {
+            loading.style.display = 'none';
+        }
     }, 10);
 }
 
@@ -328,6 +342,7 @@ function getVoxelColor(point, mesh) {
 }
 
 function mergeGeometries(model) {
+    console.log('Merging geometries...');
     const geometries = [];
     const materials = [];
     model.traverse((child) => {
@@ -340,12 +355,17 @@ function mergeGeometries(model) {
     });
 
     if (geometries.length === 0) {
+        console.log('No geometries found to merge.');
         return null;
     }
 
+    console.log(`Found ${geometries.length} geometries to merge.`);
     const mergedGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries(geometries, true);
     const mesh = new THREE.Mesh(mergedGeometry, materials);
+
+    console.log('Initializing MeshBVH...');
     mesh.geometry.boundsTree = new window.MeshBVHLib.MeshBVH(mesh.geometry);
+    console.log('MeshBVH initialized:', !!mesh.geometry.boundsTree);
     return mesh;
 }
 
