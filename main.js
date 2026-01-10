@@ -74,6 +74,9 @@ modelInput.addEventListener('change', (event) => {
     const reader = new FileReader();
     reader.onload = (e) => {
         try {
+            if (model) {
+                scene.remove(model);
+            }
             const contents = e.target.result;
             const loader = new THREE.OBJLoader();
             model = loader.parse(contents);
