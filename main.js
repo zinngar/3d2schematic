@@ -357,7 +357,11 @@ function voxelize(model, resolution, palette) {
 
 function getVoxelColor(point, mesh) {
     const bvh = mesh.geometry.boundsTree;
-    const target = {};
+    const target = {
+        point: new THREE.Vector3(),
+        distance: Infinity,
+        faceIndex: -1
+    };
     const closestPoint = bvh.closestPointToPoint(point, target);
 
     const pos = mesh.geometry.attributes.position;

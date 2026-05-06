@@ -1,8 +1,12 @@
+# NOTE: For this deployment to succeed, you must enable GitHub Pages in your repository settings:
+# 1. Go to Settings > Pages
+# 2. Under "Build and deployment" > "Source", select "GitHub Actions"
+
 name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ["feature/3d-to-schematic-converter-14070782498583018028"]
+    branches: ["main", "master", "feature/3d-to-schematic-converter-14070782498583018028"]
   workflow_dispatch:
 
 permissions:
