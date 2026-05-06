@@ -9,6 +9,8 @@ async function initPalette() {
     await fetchBlocks();
     const addPaletteEntryButton = document.getElementById('add-palette-entry');
     addPaletteEntryButton.addEventListener('click', () => createPaletteEntry());
+    const autoDetectButton = document.getElementById('auto-detect-colors');
+    autoDetectButton.addEventListener('click', () => autoDetectColors());
     createPaletteEntry('#ffffff', 'minecraft:stone');
 }
 
@@ -17,6 +19,13 @@ async function fetchBlocks() {
         const response = await fetch('https://raw.githubusercontent.com/MCMrARM/minecraft-block-ids/master/blocks_271.json');
         const blocks = await response.json();
         minecraftBlocks = blocks.map(block => block.name);
+
+        const blockList = document.getElementById('block-list');
+        minecraftBlocks.forEach(blockName => {
+            const option = document.createElement('option');
+            option.value = blockName;
+            blockList.appendChild(option);
+        });
     } catch (error) {
         console.error('Error fetching Minecraft blocks:', error);
     }
@@ -31,14 +40,11 @@ function createPaletteEntry(color = '#ffffff', block = '') {
     colorInput.type = 'color';
     colorInput.value = color;
 
-    const blockSelect = document.createElement('select');
-    for (const blockName of minecraftBlocks) {
-        const option = document.createElement('option');
-        option.value = blockName;
-        option.textContent = blockName;
-        blockSelect.appendChild(option);
-    }
-    blockSelect.value = block;
+    const blockInput = document.createElement('input');
+    blockInput.type = 'text';
+    blockInput.setAttribute('list', 'block-list');
+    blockInput.placeholder = 'Search block...';
+    blockInput.value = block;
 
     const removeButton = document.createElement('button');
     removeButton.textContent = 'Remove';
@@ -47,9 +53,52 @@ function createPaletteEntry(color = '#ffffff', block = '') {
     });
 
     entryDiv.appendChild(colorInput);
-    entryDiv.appendChild(blockSelect);
+    entryDiv.appendChild(blockInput);
     entryDiv.appendChild(removeButton);
     paletteEntries.appendChild(entryDiv);
+}
+
+function autoDetectColors() {
+    if (!model) {
+        alert('Please load a 3D model first.');
+        return;
+    }
+
+    const uniqueColors = new Set();
+    model.traverse((child) => {
+        if (child.isMesh) {
+            // Check for material color
+            if (Array.isArray(child.material)) {
+                child.material.forEach(mat => {
+                    if (mat.color) uniqueColors.add(mat.color.getHex());
+                });
+            } else if (child.material && child.material.color) {
+                uniqueColors.add(child.material.color.getHex());
+            }
+
+            // Check for vertex colors
+            const colors = child.geometry.attributes.color;
+            if (colors) {
+                for (let i = 0; i < colors.count; i++) {
+                    const color = new THREE.Color().fromBufferAttribute(colors, i);
+                    uniqueColors.add(color.getHex());
+                }
+            }
+        }
+    });
+
+    if (uniqueColors.size === 0) {
+        alert('No colors detected in the model.');
+        return;
+    }
+
+    // Clear existing palette except for a default stone entry if needed
+    // const paletteEntries = document.getElementById('palette-entries');
+    // paletteEntries.innerHTML = '';
+
+    uniqueColors.forEach(hex => {
+        createPaletteEntry('#' + hex.toString(16).padStart(6, '0'), 'minecraft:stone');
+    });
 }
 
 function initViewer() {
@@ -315,7 +364,16 @@ function getVoxelColor(point, mesh) {
     const colors = mesh.geometry.attributes.color;
 
     if (!colors) {
-        const materialColor = mesh.material.color;
+        let materialColor;
+        if (Array.isArray(mesh.material)) {
+            const materialIndex = mesh.geometry.groups.find(group =>
+                target.faceIndex >= group.start / 3 &&
+                target.faceIndex < (group.start + group.count) / 3
+            )?.materialIndex || 0;
+            materialColor = mesh.material[materialIndex].color;
+        } else {
+            materialColor = mesh.material.color;
+        }
         return materialColor ? materialColor.getHex() : 0xffffff;
     }
 
