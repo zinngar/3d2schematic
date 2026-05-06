@@ -1,5 +1,7 @@
 # 3D Model to Litematica Schematic Converter
 
+[https://github.com/zinngar/3d2schematic](https://github.com/zinngar/3d2schematic)
+
 This web application converts 3D models into `.litematic` schematic files for use with the Litematica mod in Minecraft.
 
 ## Supported File Types
