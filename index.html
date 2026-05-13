@@ -1,49 +1,1119 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>3D Model to Schematic</title>
-    <style>
-        body { margin: 0; }
-        canvas { display: block; }
-        #viewer-container {
-            width: 500px;
-            height: 500px;
-            border: 1px solid black;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Litho — 3D to Litematic Converter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0f0f;
+    --bg2: #161718;
+    --bg3: #1e2021;
+    --border: rgba(255,255,255,0.08);
+    --border-hi: rgba(255,255,255,0.16);
+    --accent: #5bf5a0;
+    --accent2: #3dd880;
+    --accent-dim: rgba(91,245,160,0.12);
+    --text: #f0f0ee;
+    --muted: #7a7d7b;
+    --muted2: #4a4d4b;
+    --danger: #f55b5b;
+    --warn: #f5c85b;
+    --info: #5bb5f5;
+    --font: 'Syne', sans-serif;
+    --mono: 'DM Mono', monospace;
+    --r: 10px;
+    --r2: 6px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 14px; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    grid-template-columns: 340px 1fr;
+    grid-template-areas: "header header" "sidebar main";
+  }
+
+  /* ── Header ── */
+  header {
+    grid-area: header;
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: var(--accent); }
+  .logo span { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 10px; letter-spacing: 0; }
+  .header-status { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+  /* ── Sidebar ── */
+  aside {
+    grid-area: sidebar;
+    border-right: 1px solid var(--border);
+    background: var(--bg2);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    height: calc(100vh - 56px);
+    position: sticky;
+    top: 56px;
+  }
+  .sidebar-section {
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  /* ── Upload Zone ── */
+  .upload-zone {
+    border: 1.5px dashed var(--border-hi);
+    border-radius: var(--r);
+    padding: 24px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+  .upload-zone input[type="file"] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer;
+  }
+  .upload-icon {
+    font-size: 28px;
+    margin-bottom: 8px;
+    display: block;
+    color: var(--muted);
+  }
+  .upload-zone:hover .upload-icon, .upload-zone.drag-over .upload-icon { color: var(--accent); }
+  .upload-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .upload-sub { font-size: 11px; color: var(--muted); }
+  .upload-loaded { display: none; }
+  .upload-loaded .file-name {
+    font-family: var(--mono); font-size: 11px; color: var(--accent);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 200px; display: inline-block; vertical-align: middle;
+  }
+
+  /* ── Model Stats ── */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat-card {
+    background: var(--bg3); border-radius: var(--r2); padding: 10px 12px;
+    border: 1px solid var(--border);
+  }
+  .stat-label { font-size: 10px; color: var(--muted); margin-bottom: 3px; }
+  .stat-value { font-size: 16px; font-weight: 700; font-family: var(--mono); color: var(--text); }
+
+  /* ── Controls ── */
+  .control-row { margin-bottom: 14px; }
+  .control-label {
+    font-size: 11px; color: var(--muted); margin-bottom: 6px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .control-label .val {
+    font-family: var(--mono); color: var(--accent); font-size: 12px;
+  }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 4px;
+    background: var(--bg3); border-radius: 2px; outline: none; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); cursor: pointer;
+    transition: transform 0.1s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+  select, input[type="text"], input[type="number"], input[type="color"] {
+    width: 100%; background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--font); font-size: 13px;
+    padding: 8px 10px; border-radius: var(--r2); outline: none;
+    transition: border-color 0.15s;
+  }
+  select:focus, input[type="text"]:focus, input[type="number"]:focus {
+    border-color: var(--accent);
+  }
+  option { background: var(--bg3); }
+
+  /* ── Palette ── */
+  .palette-entries { display: flex; flex-direction: column; gap: 8px; }
+  .palette-entry {
+    display: grid;
+    grid-template-columns: 32px 1fr auto;
+    gap: 6px;
+    align-items: center;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--r2);
+    padding: 6px 8px;
+  }
+  .palette-entry input[type="color"] {
+    width: 28px; height: 28px; padding: 2px; border-radius: 4px;
+    cursor: pointer; border: 1px solid var(--border);
+  }
+  .palette-entry input[type="text"] {
+    padding: 6px 8px; font-size: 12px; font-family: var(--mono);
+  }
+  .btn-icon {
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 16px; padding: 4px;
+    border-radius: 4px; display: flex; align-items: center; justify-content: center;
+    transition: color 0.15s, background 0.15s;
+  }
+  .btn-icon:hover { color: var(--danger); background: rgba(245,91,91,0.1); }
+  .palette-actions { display: flex; gap: 6px; margin-top: 10px; }
+
+  /* ── Buttons ── */
+  .btn {
+    font-family: var(--font); font-size: 12px; font-weight: 700;
+    padding: 8px 14px; border-radius: var(--r2); cursor: pointer;
+    border: 1px solid var(--border-hi); background: var(--bg3);
+    color: var(--text); transition: all 0.15s; letter-spacing: 0.3px;
+    white-space: nowrap; display: flex; align-items: center; gap: 6px;
+  }
+  .btn:hover { background: var(--bg2); border-color: var(--accent); color: var(--accent); }
+  .btn-primary {
+    background: var(--accent); color: #0e0f0f; border-color: var(--accent);
+    font-size: 14px; padding: 12px 20px; border-radius: var(--r);
+    justify-content: center; width: 100%; letter-spacing: 0.5px;
+  }
+  .btn-primary:hover { background: var(--accent2); border-color: var(--accent2); color: #0e0f0f; }
+  .btn-primary:disabled {
+    background: var(--muted2); border-color: var(--muted2); color: var(--muted);
+    cursor: not-allowed;
+  }
+  .btn-sm { padding: 5px 10px; font-size: 11px; flex: 1; justify-content: center; }
+
+  /* ── Main viewer area ── */
+  main {
+    grid-area: main;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .viewer-toolbar {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg2);
+  }
+  .toolbar-label { font-size: 11px; color: var(--muted); margin-right: auto; }
+  #viewer-container {
+    flex: 1;
+    position: relative;
+    background: var(--bg3);
+    min-height: 0;
+  }
+  #viewer-container canvas { display: block; width: 100% !important; height: 100% !important; }
+  .viewer-hint {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 12px; pointer-events: none;
+  }
+  .viewer-hint-icon { font-size: 48px; color: var(--muted2); }
+  .viewer-hint-text { font-size: 14px; color: var(--muted); text-align: center; line-height: 1.6; }
+  body[data-model-loaded="true"] .viewer-hint { display: none; }
+
+  /* ── Progress overlay ── */
+  #progress-overlay {
+    display: none;
+    position: absolute; inset: 0;
+    background: rgba(14,15,15,0.88);
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 20px; z-index: 50;
+  }
+  #progress-overlay.active { display: flex; }
+  .progress-title { font-size: 16px; font-weight: 700; color: var(--accent); }
+  .progress-sub { font-size: 12px; color: var(--muted); font-family: var(--mono); min-height: 20px; }
+  .progress-bar-track {
+    width: 300px; height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%; background: var(--accent); border-radius: 2px;
+    width: 0%; transition: width 0.1s;
+  }
+  .progress-percent { font-size: 28px; font-weight: 800; font-family: var(--mono); color: var(--text); }
+
+  /* ── Convert panel ── */
+  .convert-panel {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--bg2);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .output-info {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  }
+  .output-stat {
+    background: var(--bg3); border-radius: var(--r2); padding: 8px 12px;
+    border: 1px solid var(--border); text-align: center;
+  }
+  .output-stat .label { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+  .output-stat .val { font-size: 13px; font-weight: 700; font-family: var(--mono); color: var(--accent); }
+
+  /* ── Notifications ── */
+  #toast {
+    position: fixed; bottom: 20px; right: 20px;
+    background: var(--bg3); border: 1px solid var(--border-hi);
+    border-radius: var(--r); padding: 12px 16px;
+    font-size: 13px; color: var(--text);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s; z-index: 200;
+    max-width: 300px;
+  }
+  #toast.show { opacity: 1; }
+  #toast.error { border-color: var(--danger); color: var(--danger); }
+  #toast.success { border-color: var(--accent); color: var(--accent); }
+
+  /* ── Color delta badge ── */
+  .badge {
+    display: inline-block; font-size: 10px; font-family: var(--mono);
+    padding: 2px 6px; border-radius: 4px; background: var(--accent-dim); color: var(--accent);
+    font-weight: 500;
+  }
+
+  /* ── Datalist ── */
+  datalist { display: none; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--muted2); border-radius: 3px; }
+
+  .gap-8 { gap: 8px; }
+  .mt-8 { margin-top: 8px; }
+  .flex { display: flex; align-items: center; }
+  .w-full { width: 100%; }
+</style>
 </head>
 <body>
-    <input type="file" id="model-input" />
-    <br>
-    <label for="resolution-input">Resolution:</label>
-    <input type="number" id="resolution-input" value="16" min="1" />
-    <br>
-    <div id="palette-container">
-      <label>Block Palette:</label>
-      <div id="palette-entries">
-        <!-- Palette entries will be added here dynamically -->
+
+<header>
+  <div>
+    <span class="logo">Litho <span>3D → Litematic Converter</span></span>
+  </div>
+  <div class="header-status" id="header-status">No model loaded</div>
+</header>
+
+<aside>
+  <!-- Upload -->
+  <div class="sidebar-section">
+    <div class="section-label">Model File</div>
+    <div class="upload-zone" id="upload-zone">
+      <input type="file" id="model-input" accept=".obj,.gltf,.glb,.stl">
+      <span class="upload-icon">⬆</span>
+      <div class="upload-title">Drop file or click to browse</div>
+      <div class="upload-sub">OBJ · GLTF · GLB · STL</div>
+      <div class="upload-loaded" id="upload-loaded">
+        <div class="upload-title" style="color:var(--accent)">Model loaded</div>
+        <div class="upload-sub"><span class="file-name" id="file-name-display"></span></div>
       </div>
-      <button type="button" id="add-palette-entry">Add Block</button>
-      <button type="button" id="auto-detect-colors">Auto-detect Colors</button>
     </div>
-    <datalist id="block-list"></datalist>
-    <br>
-    <button id="convert-button">Convert to Schematic</button>
-    <div id="loading" style="display: none;">Converting...</div>
-    <div id="viewer-container"></div>
-
-    <div id="log-container">
-        <h3>Debug Log</h3>
-        <button id="clear-log">Clear Log</button>
-        <pre id="log-output"></pre>
+    <div class="stat-grid mt-8" id="model-stats" style="display:none">
+      <div class="stat-card">
+        <div class="stat-label">Vertices</div>
+        <div class="stat-value" id="stat-verts">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Faces</div>
+        <div class="stat-value" id="stat-faces">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Materials</div>
+        <div class="stat-value" id="stat-mats">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Format</div>
+        <div class="stat-value" id="stat-fmt">—</div>
+      </div>
     </div>
+  </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three/examples/js/loaders/OBJLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three/examples/js/utils/BufferGeometryUtils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://unpkg.com/three-mesh-bvh@0.5.23/build/index.umd.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/nbtify/dist/browser.js"></script>
-    <script src="main.js"></script>
+  <!-- Conversion settings -->
+  <div class="sidebar-section">
+    <div class="section-label">Conversion Settings</div>
+    <div class="control-row">
+      <div class="control-label">Resolution <span class="val" id="res-val">32</span></div>
+      <input type="range" min="8" max="128" step="1" value="32" id="resolution-input" oninput="document.getElementById('res-val').textContent=this.value;updateOutputStats()">
+    </div>
+    <div class="control-row">
+      <div class="control-label">Game Version</div>
+      <select id="version-select">
+        <option value="3953">1.21 (Latest)</option>
+        <option value="3700">1.20</option>
+        <option value="3465">1.19</option>
+        <option value="2860">1.18</option>
+        <option value="2730" selected>1.17</option>
+        <option value="2586">1.16</option>
+      </select>
+    </div>
+    <div class="control-row">
+      <div class="control-label">Color Space</div>
+      <select id="colorspace-select">
+        <option value="cielab">CIELAB ΔE (perceptual)</option>
+        <option value="rgb">RGB (fast)</option>
+      </select>
+    </div>
+    <div class="control-row">
+      <div class="control-label">Fill Mode</div>
+      <select id="fill-mode">
+        <option value="solid">Solid (filled)</option>
+        <option value="surface">Surface only</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Palette -->
+  <div class="sidebar-section" style="flex:1">
+    <div class="section-label">Block Palette</div>
+    <div class="palette-entries" id="palette-entries"></div>
+    <div class="palette-actions">
+      <button class="btn btn-sm" id="add-palette-entry">+ Add block</button>
+      <button class="btn btn-sm" id="auto-detect-colors">⚡ Auto-detect</button>
+    </div>
+    <div class="flex mt-8 gap-8" style="flex-wrap:wrap">
+      <button class="btn btn-sm" id="export-palette">↑ Export palette</button>
+      <button class="btn btn-sm" id="import-palette-btn">↓ Import palette</button>
+      <input type="file" id="import-palette-input" accept=".json" style="display:none">
+    </div>
+  </div>
+
+  <!-- Convert -->
+  <div style="padding:16px">
+    <button class="btn btn-primary" id="convert-button" disabled>
+      Convert to .litematic
+    </button>
+  </div>
+</aside>
+
+<main>
+  <div class="viewer-toolbar">
+    <span class="toolbar-label">3D Preview</span>
+    <button class="btn" id="reset-camera">↺ Reset camera</button>
+    <button class="btn" id="toggle-wireframe">Wireframe</button>
+    <button class="btn" id="toggle-axes">Axes</button>
+  </div>
+
+  <div id="viewer-container">
+    <div class="viewer-hint">
+      <div class="viewer-hint-icon">◈</div>
+      <div class="viewer-hint-text">Load a 3D model to begin<br><small style="color:var(--muted2)">OBJ · GLTF · GLB · STL supported</small></div>
+    </div>
+  </div>
+
+  <div class="convert-panel">
+    <div class="output-info">
+      <div class="output-stat">
+        <div class="label">Output size</div>
+        <div class="val" id="out-size">—</div>
+      </div>
+      <div class="output-stat">
+        <div class="label">Est. blocks</div>
+        <div class="val" id="out-blocks">—</div>
+      </div>
+      <div class="output-stat">
+        <div class="label">Volume</div>
+        <div class="val" id="out-volume">—</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="progress-overlay">
+  <div class="progress-percent" id="progress-pct">0%</div>
+  <div class="progress-bar-track">
+    <div class="progress-bar-fill" id="progress-fill"></div>
+  </div>
+  <div class="progress-title" id="progress-title">Converting…</div>
+  <div class="progress-sub" id="progress-sub"></div>
+</div>
+
+<div id="toast"></div>
+<datalist id="block-list"></datalist>
+
+<!-- Three.js core -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.5.23/build/index.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/nbtify@2.4.0/dist/index.global.js"></script>
+
+<script>
+// ── Globals ──────────────────────────────────────────────────────────────────
+let scene, camera, renderer, controls, axesHelper;
+let model = null, modelFilename = '';
+let wireframeMode = false, axesVisible = false;
+let minecraftBlocks = [];
+
+// ── Toast ────────────────────────────────────────────────────────────────────
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.className = '', 3000);
+}
+
+// ── Init viewer ──────────────────────────────────────────────────────────────
+function initViewer() {
+  const container = document.getElementById('viewer-container');
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1e2021);
+
+  camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, 0.01, 2000);
+  camera.position.set(5, 4, 7);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  container.appendChild(renderer.domElement);
+
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+
+  const amb = new THREE.AmbientLight(0xffffff, 0.6);
+  scene.add(amb);
+  const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+  dir.position.set(3, 6, 4);
+  scene.add(dir);
+  const dir2 = new THREE.DirectionalLight(0x8888ff, 0.3);
+  dir2.position.set(-4, -2, -3);
+  scene.add(dir2);
+
+  // Grid
+  const grid = new THREE.GridHelper(20, 20, 0x2a2d2b, 0x222523);
+  scene.add(grid);
+
+  axesHelper = new THREE.AxesHelper(3);
+  axesHelper.visible = false;
+  scene.add(axesHelper);
+
+  window.addEventListener('resize', () => {
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+  });
+
+  (function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  })();
+}
+
+// ── Model loading ─────────────────────────────────────────────────────────────
+document.getElementById('model-input').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  loadModelFile(file);
+});
+
+// Drag and drop
+const uploadZone = document.getElementById('upload-zone');
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) loadModelFile(file);
+});
+
+function loadModelFile(file) {
+  modelFilename = file.name;
+  const ext = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+
+  reader.onload = e => {
+    try {
+      if (model) { scene.remove(model); model = null; }
+
+      if (ext === 'obj') {
+        const loader = new THREE.OBJLoader();
+        model = loader.parse(e.target.result);
+        finalizeModel(ext);
+      } else if (ext === 'stl') {
+        const loader = new THREE.STLLoader();
+        const geo = loader.parse(e.target.result);
+        const mat = new THREE.MeshStandardMaterial({ color: 0x888888, side: THREE.DoubleSide });
+        model = new THREE.Mesh(geo, mat);
+        finalizeModel(ext);
+      } else if (ext === 'gltf' || ext === 'glb') {
+        const loader = new THREE.GLTFLoader();
+        loader.parse(e.target.result, '', gltf => {
+          model = gltf.scene;
+          finalizeModel(ext);
+        }, err => toast('GLTF load error: ' + err.message, 'error'));
+        return;
+      } else {
+        toast('Unsupported format: ' + ext, 'error');
+        return;
+      }
+    } catch (err) {
+      toast('Load error: ' + err.message, 'error');
+    }
+  };
+
+  if (ext === 'stl' || ext === 'glb') {
+    reader.readAsArrayBuffer(file);
+  } else {
+    reader.readAsText(file);
+  }
+}
+
+function finalizeModel(fmt) {
+  if (!model) return;
+  // Center + normalize scale
+  const box = new THREE.Box3().setFromObject(model);
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+  model.position.sub(center);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const maxDim = Math.max(size.x, size.y, size.z);
+  if (maxDim > 0) model.scale.setScalar(4 / maxDim);
+
+  scene.add(model);
+
+  // Focus camera
+  controls.reset();
+  camera.position.set(6, 5, 8);
+  controls.target.set(0, 0, 0);
+  controls.update();
+
+  document.body.setAttribute('data-model-loaded', 'true');
+  document.getElementById('convert-button').disabled = false;
+
+  // Stats
+  let verts = 0, faces = 0, mats = new Set();
+  model.traverse(child => {
+    if (child.isMesh) {
+      const geo = child.geometry;
+      verts += geo.attributes.position ? geo.attributes.position.count : 0;
+      faces += geo.index ? geo.index.count / 3 : (geo.attributes.position ? geo.attributes.position.count / 3 : 0);
+      if (Array.isArray(child.material)) child.material.forEach(m => mats.add(m.uuid));
+      else if (child.material) mats.add(child.material.uuid);
+    }
+  });
+
+  document.getElementById('stat-verts').textContent = fmtNum(verts);
+  document.getElementById('stat-faces').textContent = fmtNum(Math.round(faces));
+  document.getElementById('stat-mats').textContent = mats.size;
+  document.getElementById('stat-fmt').textContent = fmt.toUpperCase();
+  document.getElementById('model-stats').style.display = 'grid';
+  document.getElementById('file-name-display').textContent = modelFilename;
+  document.getElementById('upload-loaded').style.display = 'block';
+  document.querySelector('.upload-zone .upload-icon').style.display = 'none';
+  document.querySelector('.upload-zone .upload-title').style.display = 'none';
+  document.querySelector('.upload-zone .upload-sub').style.display = 'none';
+  document.getElementById('header-status').textContent = modelFilename;
+
+  updateOutputStats();
+  toast('Model loaded: ' + modelFilename, 'success');
+}
+
+function fmtNum(n) {
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return String(n);
+}
+
+// ── Toolbar buttons ───────────────────────────────────────────────────────────
+document.getElementById('reset-camera').addEventListener('click', () => {
+  camera.position.set(6, 5, 8);
+  controls.target.set(0, 0, 0);
+  controls.update();
+});
+
+document.getElementById('toggle-wireframe').addEventListener('click', function() {
+  wireframeMode = !wireframeMode;
+  this.style.borderColor = wireframeMode ? 'var(--accent)' : '';
+  this.style.color = wireframeMode ? 'var(--accent)' : '';
+  if (model) model.traverse(child => {
+    if (child.isMesh) {
+      if (Array.isArray(child.material)) child.material.forEach(m => m.wireframe = wireframeMode);
+      else if (child.material) child.material.wireframe = wireframeMode;
+    }
+  });
+});
+
+document.getElementById('toggle-axes').addEventListener('click', function() {
+  axesVisible = !axesVisible;
+  axesHelper.visible = axesVisible;
+  this.style.borderColor = axesVisible ? 'var(--accent)' : '';
+  this.style.color = axesVisible ? 'var(--accent)' : '';
+});
+
+// ── Output stats ──────────────────────────────────────────────────────────────
+function updateOutputStats() {
+  const res = parseInt(document.getElementById('resolution-input').value);
+  document.getElementById('out-size').textContent = res + '³';
+  const est = Math.round(res * res * res * 0.55);
+  document.getElementById('out-blocks').textContent = fmtNum(est);
+  document.getElementById('out-volume').textContent = fmtNum(res * res * res);
+}
+updateOutputStats();
+
+// ── Block palette ─────────────────────────────────────────────────────────────
+async function initPalette() {
+  await fetchBlocks();
+  document.getElementById('add-palette-entry').addEventListener('click', () => createPaletteEntry());
+  document.getElementById('auto-detect-colors').addEventListener('click', autoDetectColors);
+  document.getElementById('export-palette').addEventListener('click', exportPalette);
+  document.getElementById('import-palette-btn').addEventListener('click', () => document.getElementById('import-palette-input').click());
+  document.getElementById('import-palette-input').addEventListener('change', importPalette);
+
+  // Default palette
+  const defaults = [
+    ['#ffffff', 'minecraft:white_concrete'],
+    ['#dddddd', 'minecraft:smooth_stone'],
+    ['#888888', 'minecraft:stone'],
+    ['#4a3728', 'minecraft:dark_oak_planks'],
+    ['#7cb87c', 'minecraft:moss_block'],
+    ['#3a5ca0', 'minecraft:blue_concrete'],
+  ];
+  defaults.forEach(([c, b]) => createPaletteEntry(c, b));
+}
+
+async function fetchBlocks() {
+  try {
+    const res = await fetch('https://raw.githubusercontent.com/MCMrARM/minecraft-block-ids/master/blocks_271.json');
+    const blocks = await res.json();
+    minecraftBlocks = blocks.map(b => b.name);
+    const list = document.getElementById('block-list');
+    minecraftBlocks.forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      list.appendChild(opt);
+    });
+  } catch (e) {
+    console.warn('Could not fetch block list:', e);
+  }
+}
+
+function createPaletteEntry(color = '#ffffff', block = 'minecraft:stone') {
+  const container = document.getElementById('palette-entries');
+  const div = document.createElement('div');
+  div.className = 'palette-entry';
+
+  const colorIn = document.createElement('input');
+  colorIn.type = 'color';
+  colorIn.value = color;
+
+  const blockIn = document.createElement('input');
+  blockIn.type = 'text';
+  blockIn.setAttribute('list', 'block-list');
+  blockIn.placeholder = 'minecraft:stone';
+  blockIn.value = block;
+
+  const rm = document.createElement('button');
+  rm.className = 'btn-icon';
+  rm.innerHTML = '✕';
+  rm.title = 'Remove';
+  rm.addEventListener('click', () => div.remove());
+
+  div.appendChild(colorIn);
+  div.appendChild(blockIn);
+  div.appendChild(rm);
+  container.appendChild(div);
+}
+
+function autoDetectColors() {
+  if (!model) { toast('Load a model first', 'error'); return; }
+  const seen = new Set();
+  model.traverse(child => {
+    if (!child.isMesh) return;
+    const mats = Array.isArray(child.material) ? child.material : [child.material];
+    mats.forEach(mat => {
+      if (mat && mat.color) {
+        const hex = '#' + mat.color.getHexString();
+        if (!seen.has(hex)) { seen.add(hex); createPaletteEntry(hex, 'minecraft:stone'); }
+      }
+    });
+    const colors = child.geometry.attributes.color;
+    if (colors) {
+      for (let i = 0; i < Math.min(colors.count, 200); i++) {
+        const c = new THREE.Color().fromBufferAttribute(colors, i);
+        const hex = '#' + c.getHexString();
+        if (!seen.has(hex)) { seen.add(hex); createPaletteEntry(hex, 'minecraft:stone'); }
+      }
+    }
+  });
+  toast(`Detected ${seen.size} color(s)`, 'success');
+}
+
+function getPalette() {
+  const entries = document.getElementById('palette-entries').children;
+  return Array.from(entries).map(e => ({
+    color: e.children[0].value,
+    block: e.children[1].value || 'minecraft:stone'
+  })).filter(e => e.block.trim());
+}
+
+function exportPalette() {
+  const p = getPalette();
+  const blob = new Blob([JSON.stringify(p, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'litho-palette.json';
+  a.click();
+  toast('Palette exported', 'success');
+}
+
+function importPalette(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      document.getElementById('palette-entries').innerHTML = '';
+      data.forEach(entry => createPaletteEntry(entry.color, entry.block));
+      toast(`Loaded ${data.length} palette entries`, 'success');
+    } catch (err) {
+      toast('Invalid palette file', 'error');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// ── CIELAB color matching ──────────────────────────────────────────────────────
+function hexToRgb(hex) {
+  const c = new THREE.Color(hex);
+  return [c.r * 255, c.g * 255, c.b * 255];
+}
+
+function rgbToLab(r, g, b) {
+  // sRGB → linear
+  let R = r / 255, G = g / 255, B = b / 255;
+  R = R > 0.04045 ? Math.pow((R + 0.055) / 1.055, 2.4) : R / 12.92;
+  G = G > 0.04045 ? Math.pow((G + 0.055) / 1.055, 2.4) : G / 12.92;
+  B = B > 0.04045 ? Math.pow((B + 0.055) / 1.055, 2.4) : B / 12.92;
+  // Linear → XYZ (D65)
+  let X = (R * 0.4124564 + G * 0.3575761 + B * 0.1804375) / 0.95047;
+  let Y = (R * 0.2126729 + G * 0.7151522 + B * 0.0721750) / 1.00000;
+  let Z = (R * 0.0193339 + G * 0.1191920 + B * 0.9503041) / 1.08883;
+  const f = v => v > 0.008856 ? Math.cbrt(v) : 7.787 * v + 16 / 116;
+  return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];
+}
+
+function colorDistance(hex1, hex2, mode) {
+  if (mode === 'rgb') {
+    return new THREE.Color(hex1).distanceToSquared(new THREE.Color(hex2));
+  }
+  const [r1, g1, b1] = hexToRgb(hex1);
+  const [r2, g2, b2] = hexToRgb(hex2);
+  const [L1, a1, b1_] = rgbToLab(r1, g1, b1);
+  const [L2, a2, b2_] = rgbToLab(r2, g2, b2);
+  return (L1 - L2) ** 2 + (a1 - a2) ** 2 + (b1_ - b2_) ** 2;
+}
+
+function findClosestBlock(hexColor, palette, mode) {
+  let best = 0, bestDist = Infinity;
+  for (let i = 0; i < palette.length; i++) {
+    const d = colorDistance(hexColor, palette[i].color, mode);
+    if (d < bestDist) { bestDist = d; best = i; }
+  }
+  return best;
+}
+
+// ── Geometry helpers ──────────────────────────────────────────────────────────
+function toIndexedGeometry(geo) {
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', geo.getAttribute('position'));
+  if (geo.getAttribute('color')) out.setAttribute('color', geo.getAttribute('color'));
+  if (geo.index) {
+    out.setIndex(geo.index);
+  } else {
+    const count = geo.getAttribute('position').count;
+    const idx = new Uint32Array(count);
+    for (let i = 0; i < count; i++) idx[i] = i;
+    out.setIndex(new THREE.BufferAttribute(idx, 1));
+  }
+  return out;
+}
+
+function mergeGeometries(mdl) {
+  const geos = [], mats = [];
+  mdl.traverse(child => {
+    if (!child.isMesh) return;
+    const indexed = toIndexedGeometry(child.geometry.clone());
+    child.updateWorldMatrix(true, false);
+    indexed.applyMatrix4(child.matrixWorld);
+    geos.push(indexed);
+    mats.push(child.material);
+  });
+  if (geos.length === 0) return null;
+  const merged = THREE.BufferGeometryUtils.mergeBufferGeometries(geos, true);
+  const mesh = new THREE.Mesh(merged, mats);
+  mesh.geometry.boundsTree = new MeshBVHLib.MeshBVH(mesh.geometry);
+  return mesh;
+}
+
+function getVoxelColorHex(point, mesh) {
+  const bvh = mesh.geometry.boundsTree;
+  const target = { point: new THREE.Vector3(), distance: Infinity, faceIndex: -1 };
+  bvh.closestPointToPoint(point, target);
+  const colors = mesh.geometry.attributes.color;
+  if (!colors) {
+    let matColor;
+    if (Array.isArray(mesh.material)) {
+      const grp = mesh.geometry.groups.find(g => target.faceIndex >= g.start / 3 && target.faceIndex < (g.start + g.count) / 3);
+      matColor = mesh.material[(grp && grp.materialIndex) || 0]?.color;
+    } else {
+      matColor = mesh.material?.color;
+    }
+    return '#' + (matColor ? matColor.getHexString() : 'ffffff');
+  }
+  const pos = mesh.geometry.attributes.position;
+  if (!target.triangle) return '#ffffff';
+  const { a, b, c } = target.triangle;
+  const vA = new THREE.Vector3().fromBufferAttribute(pos, a);
+  const vB = new THREE.Vector3().fromBufferAttribute(pos, b);
+  const vC = new THREE.Vector3().fromBufferAttribute(pos, c);
+  const bary = new THREE.Vector3();
+  THREE.Triangle.getBarycoord(target.point, vA, vB, vC, bary);
+  const cA = new THREE.Color().fromBufferAttribute(colors, a);
+  const cB = new THREE.Color().fromBufferAttribute(colors, b);
+  const cC = new THREE.Color().fromBufferAttribute(colors, c);
+  const mix = new THREE.Color(0, 0, 0);
+  mix.add(cA.clone().multiplyScalar(bary.x));
+  mix.add(cB.clone().multiplyScalar(bary.y));
+  mix.add(cC.clone().multiplyScalar(bary.z));
+  return '#' + mix.getHexString();
+}
+
+// ── Voxelization ──────────────────────────────────────────────────────────────
+function voxelize(mdl, resolution, palette, colorMode, fillMode, progressCb) {
+  const merged = mergeGeometries(mdl);
+  if (!merged) return new Uint8Array(0);
+
+  const box = new THREE.Box3().setFromObject(merged);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+
+  // Preserve aspect ratio: compute per-axis resolution
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const rx = Math.max(1, Math.round(resolution * size.x / maxDim));
+  const ry = Math.max(1, Math.round(resolution * size.y / maxDim));
+  const rz = Math.max(1, Math.round(resolution * size.z / maxDim));
+
+  const stepX = size.x / rx, stepY = size.y / ry, stepZ = size.z / rz;
+  const startX = box.min.x + stepX * 0.5;
+  const startY = box.min.y + stepY * 0.5;
+  const startZ = box.min.z + stepZ * 0.5;
+
+  const voxels = new Uint8Array(rx * ry * rz);
+  const ray = new THREE.Ray();
+  ray.direction.set(0, 0, 1);
+  const total = rx * ry;
+  let done = 0;
+
+  for (let x = 0; x < rx; x++) {
+    for (let y = 0; y < ry; y++) {
+      // Ray-column: cast once, collect sorted Z hits
+      const ox = startX + x * stepX;
+      const oy = startY + y * stepY;
+      ray.origin.set(ox, oy, box.min.z - 1);
+
+      const hits = merged.geometry.boundsTree.intersectRay(ray);
+      hits.sort((a, b) => a.point.z - b.point.z);
+
+      for (let z = 0; z < rz; z++) {
+        const pz = startZ + z * stepZ;
+        // Count ray crossings at pz
+        const crossings = hits.filter(h => h.point.z <= pz).length;
+        const inside = (crossings % 2 === 1);
+
+        if (!inside) continue;
+
+        // Surface-only mode: skip if surrounded
+        if (fillMode === 'surface') {
+          const isSurface =
+            x === 0 || x === rx - 1 ||
+            y === 0 || y === ry - 1 ||
+            z === 0 || z === rz - 1;
+          if (!isSurface) {
+            // Quick neighbor check
+            let exposed = false;
+            const neighbors = [[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]];
+            for (const [dx,dy,dz] of neighbors) {
+              const nx = x+dx, ny = y+dy, nz = z+dz;
+              if (nx < 0 || ny < 0 || nz < 0 || nx >= rx || ny >= ry || nz >= rz) { exposed = true; break; }
+              if (voxels[nx + ny * rx + nz * rx * ry] === 0) { exposed = true; break; }
+            }
+            if (!exposed) continue;
+          }
+        }
+
+        const pt = new THREE.Vector3(ox, oy, pz);
+        const hex = getVoxelColorHex(pt, merged);
+        const bi = findClosestBlock(hex, palette, colorMode);
+        voxels[x + y * rx + z * rx * ry] = bi + 1;
+      }
+
+      done++;
+      if (done % 50 === 0) progressCb(done / total, rx, ry, rz);
+    }
+  }
+  progressCb(1, rx, ry, rz);
+  return { voxels, rx, ry, rz };
+}
+
+// ── NBT / Litematic ───────────────────────────────────────────────────────────
+function packBlockStates(states, paletteSize) {
+  const bitsPerEntry = Math.max(2, Math.ceil(Math.log2(paletteSize)));
+  const entriesPerLong = Math.floor(64 / bitsPerEntry);
+  const longs = new BigInt64Array(Math.ceil(states.length / entriesPerLong));
+  for (let i = 0; i < states.length; i++) {
+    const li = Math.floor(i / entriesPerLong);
+    const bi = (i % entriesPerLong) * bitsPerEntry;
+    longs[li] |= BigInt(states[i]) << BigInt(bi);
+  }
+  return longs;
+}
+
+function createNBT(voxels, rx, ry, rz, palette) {
+  const { Root, Compound, List, Int, String, Long, IntArray, LongArray } = nbtify;
+  const nbtPal = [new Compound({ Name: new String('minecraft:air') })];
+  palette.forEach(e => nbtPal.push(new Compound({ Name: new String(e.block) })));
+  const packed = new LongArray(packBlockStates(voxels, nbtPal.length));
+  const version = parseInt(document.getElementById('version-select').value);
+  const totalBlocks = voxels.filter(v => v > 0).length;
+
+  return new Root({
+    MinecraftDataVersion: new Int(version),
+    Version: new Int(5),
+    Regions: new Compound({
+      Main: new Compound({
+        BlockStatePalette: new List(nbtPal),
+        BlockStates: packed,
+        Position: new IntArray([0, 0, 0]),
+        Size: new IntArray([rx, ry, rz])
+      })
+    }),
+    Metadata: new Compound({
+      Author: new String('Litho'),
+      Description: new String('Generated by Litho 3D Converter'),
+      Name: new String(modelFilename.replace(/\.[^/.]+$/, '')),
+      RegionCount: new Int(1),
+      TimeCreated: new Long(BigInt(Date.now())),
+      TimeModified: new Long(BigInt(Date.now())),
+      TotalBlocks: new Int(totalBlocks),
+      TotalVolume: new Int(rx * ry * rz)
+    })
+  });
+}
+
+// ── Convert button ────────────────────────────────────────────────────────────
+document.getElementById('convert-button').addEventListener('click', async () => {
+  if (!model) { toast('Load a model first', 'error'); return; }
+  const palette = getPalette();
+  if (palette.length === 0) { toast('Add at least one palette entry', 'error'); return; }
+
+  const overlay = document.getElementById('progress-overlay');
+  const pct = document.getElementById('progress-pct');
+  const fill = document.getElementById('progress-fill');
+  const sub = document.getElementById('progress-sub');
+  const title = document.getElementById('progress-title');
+
+  overlay.classList.add('active');
+  title.textContent = 'Voxelising…';
+  sub.textContent = 'Merging geometries';
+  pct.textContent = '0%';
+  fill.style.width = '0%';
+
+  const resolution = parseInt(document.getElementById('resolution-input').value);
+  const colorMode = document.getElementById('colorspace-select').value;
+  const fillMode = document.getElementById('fill-mode').value;
+
+  // Defer to next frame so UI updates
+  await new Promise(r => setTimeout(r, 50));
+
+  try {
+    let finalRx, finalRy, finalRz;
+    const result = voxelize(model, resolution, palette, colorMode, fillMode, (p, rx, ry, rz) => {
+      const pVal = Math.round(p * 80);
+      pct.textContent = pVal + '%';
+      fill.style.width = pVal + '%';
+      sub.textContent = `${rx}×${ry}×${rz} voxels`;
+      finalRx = rx; finalRy = ry; finalRz = rz;
+    });
+
+    title.textContent = 'Writing NBT…';
+    sub.textContent = 'Packing block states';
+    pct.textContent = '85%';
+    fill.style.width = '85%';
+    await new Promise(r => setTimeout(r, 30));
+
+    const nbt = createNBT(result.voxels, result.rx, result.ry, result.rz, palette);
+
+    title.textContent = 'Compressing…';
+    pct.textContent = '92%';
+    fill.style.width = '92%';
+    await new Promise(r => setTimeout(r, 30));
+
+    const compressed = await nbtify.write(nbt, { compressed: true });
+
+    pct.textContent = '100%';
+    fill.style.width = '100%';
+    title.textContent = 'Done!';
+    sub.textContent = `${result.voxels.filter(v => v > 0).length.toLocaleString()} blocks placed`;
+
+    await new Promise(r => setTimeout(r, 600));
+
+    const filename = modelFilename.replace(/\.[^/.]+$/, '') + '.litematic';
+    const blob = new Blob([compressed], { type: 'application/octet-stream' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+
+    toast('Saved: ' + filename, 'success');
+  } catch (err) {
+    console.error(err);
+    toast('Conversion failed: ' + err.message, 'error');
+  } finally {
+    overlay.classList.remove('active');
+  }
+});
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+initViewer();
+initPalette();
+</script>
 </body>
 </html>
